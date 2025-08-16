@@ -36,7 +36,7 @@ let geoLayer = null;
 let userMarker = null;
 
 // Load GeoJSON local bodies
-fetch('local-body.geojson')
+fetch('local_body.geojson')
   .then(res => res.json())
   .then(data => {
     geoFeatures = data.features;
