@@ -25,12 +25,10 @@
 <script>
 let map, geoFeatures = [], geoLayer = null, userMarker = null;
 let currentLocalBody = null;
-let counter = 1; // Counter for updates
+let counter = 1; // Counter for refresh verification
 
 // Example neighbor map (replace with real neighbor data if available)
-let neighborsMap = {
-  // "LB001": ["LB002","LB003"], ...
-};
+let neighborsMap = {};
 
 // Utility to get local body name
 function getLocalBodyName(props){
@@ -51,12 +49,10 @@ function isMarkerInView(latlng){
 function findCurrentLocalBody(lat, lng){
   const point = [lng, lat];
 
-  // 1. Check previous local body
   if(currentLocalBody && turf.booleanPointInPolygon(point, currentLocalBody)){
     return currentLocalBody;
   }
 
-  // 2. Check neighbors
   if(currentLocalBody){
     const neighborIds = neighborsMap[currentLocalBody.properties.ID] || [];
     for(const id of neighborIds){
@@ -67,7 +63,6 @@ function findCurrentLocalBody(lat, lng){
     }
   }
 
-  // 3. Fallback: check all polygons
   for(const feat of geoFeatures){
     if(turf.booleanPointInPolygon(point, feat)){
       return feat;
@@ -86,7 +81,7 @@ function moveMarkerSmoothly(marker, newLatLng){
 function updateLocation(lat, lng){
   const latlng = [lat, lng];
 
-  // Update the counter for debugging (1→5 cycle)
+  // Update counter every refresh
   let resultText = "Update: " + counter;
   counter = counter % 5 + 1;
 
@@ -107,7 +102,6 @@ function updateLocation(lat, lng){
   if(found){
     if(currentLocalBody !== found){
       currentLocalBody = found;
-
       const layer = geoLayer.getLayers().find(l => l.feature === found);
       if(layer){
         map.fitBounds(layer.getBounds(), {padding:[100,100]});
@@ -122,10 +116,10 @@ function updateLocation(lat, lng){
 }
 
 // Initialize map immediately
-map = L.map('map').setView([10.5, 76.5], 7); // Center of Kerala
+map = L.map('map').setView([10.5, 76.5], 7);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
 
-// Load GeoJSON first
+// Load GeoJSON
 fetch('local_bodies.geojson')
   .then(res => res.json())
   .then(data => {
@@ -140,7 +134,7 @@ fetch('local_bodies.geojson')
       style: {color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}
     }).addTo(map);
 
-    // Start watching position (~3 seconds frequency)
+    // Watch position
     if(navigator.geolocation){
       navigator.geolocation.watchPosition(pos => {
         updateLocation(pos.coords.latitude, pos.coords.longitude);
