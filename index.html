@@ -1,309 +1,104 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Kerala Local Body Finder</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kerala Local Body Locator</title>
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-sA+e2gkG6k2kTQ0K0r0gHqS0p8Jg3zv4qX+7QpF0h+M=" crossorigin="" />
-
-  <style>
-    html,body,#map { height: 100%; margin: 0; padding: 0; }
-    .top-left {
-      position: absolute;
-      left: 10px;
-      top: 10px;
-      z-index: 1000;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    }
-    .btn {
-      background: #007bff;
-      color: white;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      font-weight: 600;
-    }
-    .btn:active { transform: translateY(1px); }
-    .info {
-      min-width: 220px;
-      background: rgba(255,255,255,0.95);
-      padding: 8px 10px;
-      border-radius: 8px;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.15);
-      font-size: 14px;
-      color: #111;
-    }
-    .result {
-      margin-top: 6px;
-      font-weight: 700;
-    }
-    .small {
-      font-size: 12px;
-      color: #444;
-    }
-    .legend {
-      position: absolute;
-      left: 10px;
-      bottom: 10px;
-      z-index: 1000;
-      background: rgba(255,255,255,0.95);
-      padding: 8px 10px;
-      border-radius: 8px;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.15);
-      font-size: 13px;
-    }
-  </style>
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  body, html { margin: 0; padding: 0; height: 100%; }
+  #map { width: 100%; height: 100%; }
+  #locateBtn {
+    position: absolute; top: 10px; left: 10px; z-index: 1000;
+    padding: 8px 12px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer;
+  }
+  #result {
+    position: absolute; top: 50px; left: 10px; z-index:1000; background:rgba(255,255,255,0.9);
+    padding:6px 10px; border-radius:6px; font-weight:bold;
+  }
+</style>
 </head>
 <body>
-  <div id="map"></div>
+<button id="locateBtn">📍 Locate me</button>
+<div id="result">Press "Locate me" to find your local body</div>
+<div id="map"></div>
 
-  <div class="top-left">
-    <button id="locateBtn" class="btn">📍 Locate me</button>
-    <div id="info" class="info">
-      <div>Kerala local body finder</div>
-      <div id="status" class="small">Load the GeoJSON and press <strong>Locate me</strong>.</div>
-      <div id="result" class="result"></div>
-    </div>
-  </div>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Turf JS for point-in-polygon -->
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
 
-  <div class="legend">
-    <div><strong>Legend</strong></div>
-    <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-      <svg width="18" height="12"><rect width="18" height="12" fill="#8fb8ff" stroke="#2a63b8" /></svg>
-      <div class="small">Local body polygons</div>
-    </div>
-    <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-      <svg width="18" height="12"><circle cx="9" cy="6" r="5" fill="#007bff" /></svg>
-      <div class="small">Your location</div>
-    </div>
-  </div>
+<script>
+const map = L.map('map').setView([10.85, 76.27], 7); // Kerala center
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-o9N1j7kGQ1mZQxKjG1l1nU9w5n6b9ksq3R9g2v3y0i8=" crossorigin=""></script>
+let geoFeatures = null;
+let geoLayer = null;
+let userMarker = null;
 
-  <!-- Turf (for point-in-polygon) -->
-  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+// Load GeoJSON
+fetch('local-body.geojson')
+  .then(res => res.json())
+  .then(data => {
+    geoFeatures = data.features;
+    geoLayer = L.geoJSON(data, {style:{color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}}).addTo(map);
+    map.fitBounds(geoLayer.getBounds());
+  })
+  .catch(err => console.error(err));
 
-  <script>
-    // Map setup
-    const map = L.map('map', {
-      zoomControl: true,
-      maxZoom: 18,
-    }).setView([10.85, 76.27], 7); // initial view around Kerala
+function getLocalBodyName(props){
+  if(!props) return 'Unknown';
+  const keys = ['name','NAME','Name','LGB_NAME','LB_NAME','local_body','LOCAL_BODY'];
+  for(const k of keys){
+    if(k in props && props[k]) return props[k];
+  }
+  return 'Unknown';
+}
 
-    // OpenStreetMap baselayer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+function locateUser(){
+  if(!navigator.geolocation) { alert("Geolocation not supported"); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
 
-    let geojsonLayer = null;
-    let highlightLayer = null;
-    let userMarker = null;
-    let userCircle = null;
-    let loadedFeatures = null;
+    // Remove old marker
+    if(userMarker) map.removeLayer(userMarker);
 
-    const statusEl = document.getElementById('status');
-    const resultEl = document.getElementById('result');
-    const locateBtn = document.getElementById('locateBtn');
+    userMarker = L.marker([lat,lng]).addTo(map);
 
-    // Utility: attempt to read a sensible name from feature.properties
-    function readableName(props) {
-      if (!props) return null;
-      const keys = ['name','NAME','Name','LGB_NAME','LB_NAME','local_body','LOCAL_BODY','NAME_EN','NAME_1','ADMIN_NAME'];
-      for (const k of keys) {
-        if (k in props && props[k]) return props[k];
-      }
-      // fallback: first string property
-      for (const k of Object.keys(props)) {
-        if (typeof props[k] === 'string' && props[k].trim().length > 0) return props[k];
-      }
-      return null;
-    }
-
-    // Load local-body.geojson from same folder
-    fetch('local-body.geojson')
-      .then(resp => {
-        if (!resp.ok) throw new Error('Could not load local-body.geojson (check path).');
-        return resp.json();
-      })
-      .then(geojson => {
-        loadedFeatures = geojson.features || [];
-        geojsonLayer = L.geoJSON(geojson, {
-          style: feature => ({
-            color: '#2a63b8',
-            weight: 1,
-            fillColor: '#8fb8ff',
-            fillOpacity: 0.35,
-            opacity: 0.9
-          }),
-          onEachFeature: (feature, layer) => {
-            const nm = readableName(feature.properties) || 'Unnamed local body';
-            layer.bindPopup(`<strong>${nm}</strong>`);
-          }
-        }).addTo(map);
-
-        // fit map to all local bodies
-        const bounds = geojsonLayer.getBounds();
-        if (bounds.isValid()) map.fitBounds(bounds, {padding: [20,20]});
-        statusEl.textContent = `Loaded ${loadedFeatures.length} local-body polygons. Click Locate me.`;
-      })
-      .catch(err => {
-        console.error(err);
-        statusEl.textContent = 'Error loading local-body.geojson — check the file path and that it is in the same repo.';
-      });
-
-    // Highlight a single feature (leaflet layer) by replacing previous highlight
-    function highlightFeature(featureLayer) {
-      if (highlightLayer) {
-        geojsonLayer.resetStyle(highlightLayer);
-      }
-      highlightLayer = featureLayer;
-      if (highlightLayer) {
-        highlightLayer.setStyle({
-          color: '#ff6600',
-          weight: 2.5,
-          fillColor: '#ffd9b8',
-          fillOpacity: 0.5
-        });
-        // bring to front
-        if (highlightLayer.bringToFront) highlightLayer.bringToFront();
-      }
-    }
-
-    // Find feature containing [lng,lat] using turf
-    function findContainingFeature(lng, lat) {
-      if (!loadedFeatures) return null;
-      const pt = turf.point([lng, lat]);
-      for (let i = 0; i < loadedFeatures.length; i++) {
-        const feat = loadedFeatures[i];
-        // Some features may be MultiPolygon or Polygon — turf handles both.
-        try {
-          if (turf.booleanPointInPolygon(pt, feat)) {
-            return {feature: feat, index: i};
-          }
-        } catch (e) {
-          // some malformed features might cause turf to error; skip
-          console.warn('turf error for feature', e);
+    // Check which polygon contains the point
+    let found = null;
+    for(const feat of geoFeatures){
+      try{
+        if(turf.booleanPointInPolygon([lng,lat], feat)) {
+          found = feat; break;
         }
-      }
-      return null;
+      }catch(e){console.warn(e);}
     }
 
-    // Given a feature object from loadedFeatures, find the corresponding Leaflet layer
-    function findLayerForFeature(targetFeature) {
-      let found = null;
-      geojsonLayer.eachLayer(layer => {
-        if (!found && layer.feature === targetFeature) found = layer;
-      });
-      return found;
-    }
-
-    // Show location: add marker + circle, pan/zoom, check polygon membership
-    function showLocation(lat, lng, accuracy) {
-      // remove old marker
-      if (userMarker) map.removeLayer(userMarker);
-      if (userCircle) map.removeLayer(userCircle);
-
-      userMarker = L.circleMarker([lat, lng], {
-        radius: 7,
-        fillColor: '#007bff',
-        color: '#fff',
-        weight: 1.2,
-        fillOpacity: 1
-      }).addTo(map);
-
-      userCircle = L.circle([lat, lng], {
-        radius: accuracy || 30,
-        fillOpacity: 0.08,
-        color: '#007bff',
-        weight: 1
-      }).addTo(map);
-
-      // zoom or fit to the feature if inside one
-      const found = findContainingFeature(lng, lat);
-
-      if (found) {
-        const featLayer = findLayerForFeature(found.feature);
-        if (featLayer) {
-          highlightFeature(featLayer);
-          // fit to the found feature
-          const fb = featLayer.getBounds();
-          if (fb.isValid()) {
-            // zoom in but don't exceed too close
-            map.fitBounds(fb, {maxZoom: 15, padding: [20,20]});
-          } else {
-            map.setView([lat, lng], 14);
-          }
+    if(found){
+      const name = getLocalBodyName(found.properties);
+      document.getElementById('result').textContent = "You are in: "+name;
+      // Highlight polygon
+      geoLayer.eachLayer(layer => {
+        if(layer.feature===found){
+          layer.setStyle({fillColor:'#ffd700', color:'#ff6600', weight:2.5, fillOpacity:0.5});
+          map.fitBounds(layer.getBounds(), {maxZoom:15});
         } else {
-          map.setView([lat, lng], 14);
+          layer.setStyle({fillColor:'#8fb8ff', color:'#2a63b8', weight:1, fillOpacity:0.3});
         }
-
-        const lbName = readableName(found.feature.properties) || 'Unnamed local body';
-        resultEl.textContent = `You are in: ${lbName}`;
-        statusEl.textContent = `Matched polygon index ${found.index}.`;
-      } else {
-        // not found
-        // clear highlight
-        if (highlightLayer) {
-          geojsonLayer.resetStyle(highlightLayer);
-          highlightLayer = null;
-        }
-        map.setView([lat, lng], 14);
-        resultEl.textContent = `No local body polygon contains this point (you may be outside the polygon data).`;
-        statusEl.textContent = `No polygon match. (Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)})`;
-      }
+      });
+    } else {
+      document.getElementById('result').textContent = "You are not inside any local body polygon.";
     }
+  }, err=>{
+    alert("Unable to get location: "+err.message);
+  }, {enableHighAccuracy:true});
+}
 
-    // Locate button handler
-    locateBtn.addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        statusEl.textContent = 'Geolocation not supported by this browser.';
-        return;
-      }
-      statusEl.textContent = 'Requesting location — allow the browser to share location.';
-      resultEl.textContent = '';
-
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const accuracy = pos.coords.accuracy;
-          showLocation(lat, lng, accuracy);
-        },
-        err => {
-          console.error(err);
-          if (err.code === 1) {
-            statusEl.textContent = 'Permission denied. Enable location permission and try again.';
-          } else {
-            statusEl.textContent = 'Unable to get location: ' + (err.message || err.code);
-          }
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-      );
-    });
-
-    // Also allow clicking map to test a point
-    map.on('click', e => {
-      const {lat, lng} = e.latlng;
-      showLocation(lat, lng, 10);
-      statusEl.textContent = 'Clicked map — test point.';
-    });
-
-    // Small: handle keyboard 'L' key to trigger locate
-    window.addEventListener('keyup', (e) => {
-      if (e.key.toLowerCase() === 'l') {
-        locateBtn.click();
-      }
-    });
-  </script>
+document.getElementById('locateBtn').addEventListener('click', locateUser);
+</script>
 </body>
 </html>
