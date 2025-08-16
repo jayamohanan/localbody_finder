@@ -25,7 +25,6 @@
 <script>
 let map, geoFeatures = [], geoLayer = null, userMarker = null;
 let currentLocalBody = null;
-let counter = 1; // Counter for debugging refresh
 let lastLat = null;
 let lastLng = null;
 const THRESHOLD_METERS = 5; // Minimum movement to recalc local body
@@ -92,13 +91,9 @@ function moveMarkerSmoothly(marker, newLatLng){
   marker.setLatLng(newLatLng);
 }
 
-// Process new location if movement threshold passed
+// Process new location
 function processLocation(lat, lng){
   const latlng = [lat, lng];
-
-  // Increment counter every refresh (for debugging)
-  let resultText = "Update: " + counter;
-  counter = counter % 5 + 1;
 
   // Add or move marker
   if(!userMarker){
@@ -119,4 +114,62 @@ function processLocation(lat, lng){
       currentLocalBody = found;
       const layer = geoLayer.getLayers().find(l => l.feature === found);
       if(layer){
-        map.fitBounds(layer.getBounds(), {paddin
+        map.fitBounds(layer.getBounds(), {padding:[100,100]});
+      }
+    }
+    document.getElementById('result').textContent = "You are in: " + getLocalBodyName(found.properties);
+  } else {
+    document.getElementById('result').textContent = "You are not inside any local body polygon.";
+  }
+}
+
+// Initialize map
+map = L.map('map').setView([10.5, 76.5], 7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
+
+// Load GeoJSON
+fetch('local_bodies.geojson')
+  .then(res => res.json())
+  .then(data => {
+    geoFeatures = data.features || [];
+    if(geoFeatures.length === 0){
+      document.getElementById('result').textContent = "GeoJSON has no features.";
+      return;
+    }
+
+    // Draw polygons
+    geoLayer = L.geoJSON(geoFeatures, {
+      style: {color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}
+    }).addTo(map);
+
+    // Watch position with movement threshold
+    if(navigator.geolocation){
+      navigator.geolocation.watchPosition(pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        if(lastLat === null || distanceInMeters(lastLat, lastLng, lat, lng) >= THRESHOLD_METERS){
+          lastLat = lat;
+          lastLng = lng;
+
+          // Temporary debug message
+          console.log("Device moved more than 5 meters — recalculating local body.");
+          document.getElementById('result').textContent = "Device moved more than 5 meters — recalculating local body.";
+
+          processLocation(lat, lng);
+        }
+      }, err => {
+        console.warn("Unable to get location: " + err.message);
+      }, { enableHighAccuracy:true, maximumAge:0, timeout:5000 });
+    } else {
+      alert("Geolocation not supported");
+    }
+
+  })
+  .catch(err=>{
+    console.error(err);
+    document.getElementById('result').textContent = "Error loading GeoJSON.";
+  });
+</script>
+</body>
+</html>
