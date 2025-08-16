@@ -4,44 +4,63 @@
   <meta charset="utf-8" />
   <title>Kerala Local Body Finder</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 100vh; }
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Initialize map
+    // Initialize the map (Kerala center approx.)
     var map = L.map('map').setView([10.1632, 76.6413], 8);
 
-    // Add OpenStreetMap tiles
+    // Add OSM basemap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Load the GeoJSON file directly from the repo
+    // Load GeoJSON from same repo folder
     fetch('local_bodies.geojson')
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("GeoJSON file not found. Check filename and path.");
+        }
+        return response.json();
+      })
       .then(data => {
         var geoLayer = L.geoJSON(data, {
           style: {
             color: "blue",
-            weight: 1
+            weight: 1,
+            fillOpacity: 0.1
           },
           onEachFeature: function (feature, layer) {
-            if (feature.properties && feature.properties.LB_NAME) {
-              layer.bindPopup(feature.properties.LB_NAME);
+            if (feature.properties) {
+              let name = feature.properties.LB_NAME || feature.properties.name || "Unnamed Area";
+              layer.bindPopup(name);
             }
           }
         }).addTo(map);
 
+        // Zoom to layer bounds
         map.fitBounds(geoLayer.getBounds());
       })
-      .catch(error => console.error('Error loading GeoJSON:', error));
+      .catch(error => console.error("Error loading GeoJSON:", error));
   </script>
 </body>
 </html>
