@@ -1,82 +1,47 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta charset="utf-8" />
   <title>Kerala Local Body Finder</title>
-
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-          crossorigin="anonymous"></script>
-
-  <!-- Turf.js for point-in-polygon & distance -->
-  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    html, body { height:100%; margin:0; }
-    #map { height: 70vh; width: 100%; }
-    .toolbar {
-      display:flex; gap:.5rem; padding:.6rem; flex-wrap:wrap; align-items:center;
-      background:#f6f7f9; border-bottom:1px solid #e2e5ea; position:sticky; top:0; z-index:1000;
-    }
-    .toolbar button {
-      padding:.5rem .75rem; border:1px solid #c9ced6; background:#fff; border-radius:.45rem;
-    }
-    #status { padding:.5rem .75rem; background:#fff; border-top:1px solid #e2e5ea; }
-    .small { font-size:.9rem; color:#5b6573; }
+    #map { height: 100vh; }
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <button id="locateBtn">📍 Locate Me</button>
-  </div>
-
   <div id="map"></div>
-  <div id="status" class="small">Loading Kerala local body GeoJSON…</div>
 
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // --- Map setup ---
-    const map = L.map('map').setView([10.352, 76.512], 8);
+    // Initialize map
+    var map = L.map('map').setView([10.1632, 76.6413], 8);
+
+    // Add OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution:'&copy; OpenStreetMap contributors'
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    let geojsonLayer = null;
-    let highlightLayer = L.geoJSON(null, {style: {color:'#1d4ed8', weight:3, fillOpacity:0.1}});
-    highlightLayer.addTo(map);
+    // Load the GeoJSON file directly from the repo
+    fetch('local_bodies.geojson')
+      .then(response => response.json())
+      .then(data => {
+        var geoLayer = L.geoJSON(data, {
+          style: {
+            color: "blue",
+            weight: 1
+          },
+          onEachFeature: function (feature, layer) {
+            if (feature.properties && feature.properties.LB_NAME) {
+              layer.bindPopup(feature.properties.LB_NAME);
+            }
+          }
+        }).addTo(map);
 
-    let youMarker = L.circleMarker([0,0], {radius:6, weight:2});
-    let accuracyCircle = null;
-    let featureCollection = null;
-    let centroids = [];
-    let nameKeys = ["name","NAME","Name","localbody","LocalBody","LB_NAME","DIST_NAME","L_SGD_NAME"];
-
-    function setStatus(msg) { document.getElementById('status').innerHTML = msg; }
-    function getFeatureName(props) {
-      for (const k of nameKeys) {
-        if (props && props[k] != null && String(props[k]).trim() !== "") return String(props[k]);
-      }
-      const keys = props ? Object.keys(props) : [];
-      if (keys.length) return String(props[keys[0]]);
-      return "Unnamed area";
-    }
-
-    function loadGeoJSON(fc) {
-      if (geojsonLayer) map.removeLayer(geojsonLayer);
-      highlightLayer.clearLayers();
-
-      geojsonLayer = L.geoJSON(fc, {
-        style: { color:'#475569', weight:1, fillOpacity:0.05 },
-        onEachFeature: (feature, layer) => {
-          layer.bindPopup(getFeatureName(feature.properties));
-        }
-      }).addTo(map);
-
-      featureCollection = fc;
-      centroids = fc.features.map((f, i) => ({ i, centroid: turf.centroid(f) }));
-      try { map.fitBounds(geojsonLayer.getBound
-
+        map.fitBounds(geoLayer.getBounds());
+      })
+      .catch(error => console.error('Error loading GeoJSON:', error));
+  </script>
+</body>
+</html>
