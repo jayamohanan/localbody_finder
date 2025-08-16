@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kerala Local Body Locator - Optimized Live</title>
+<title>Kerala Local Body Locator - Live</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
   body, html { margin: 0; padding: 0; height: 100%; }
-  #map { width: 100%; height: 100%; display: none; }
+  #map { width: 100%; height: 100%; }
   #result {
     position: absolute; top: 10px; left: 10px; z-index:1000; background:rgba(255,255,255,0.9);
     padding:6px 10px; border-radius:6px; font-weight:bold;
@@ -26,9 +26,9 @@
 let map, geoFeatures = [], geoLayer = null, userMarker = null;
 let currentLocalBody = null;
 
-// Replace this with your actual neighbors data (ID = local body ID)
+// Example neighbor map (replace with real neighbor data if available)
 let neighborsMap = {
-  // Example: "LB001": ["LB002","LB003"], ...
+  // "LB001": ["LB002","LB003"], ...
 };
 
 // Utility to get local body name
@@ -85,24 +85,6 @@ function moveMarkerSmoothly(marker, newLatLng){
 function updateLocation(lat, lng){
   const latlng = [lat, lng];
 
-  // Show map if first time
-  if(document.getElementById('map').style.display === 'none'){
-    document.getElementById('map').style.display = 'block';
-  }
-
-  // Initialize map if not done
-  if(!map){
-    map = L.map('map').setView(latlng, 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
-  }
-
-  // Draw polygons if not done
-  if(!geoLayer){
-    geoLayer = L.geoJSON(geoFeatures, {
-      style: {color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}
-    }).addTo(map);
-  }
-
   // Add or move marker
   if(!userMarker){
     userMarker = L.circleMarker(latlng, {
@@ -118,10 +100,11 @@ function updateLocation(lat, lng){
   // Find local body
   let found = findCurrentLocalBody(lat, lng);
   if(found){
-    // Update only if changed
     if(currentLocalBody !== found){
       currentLocalBody = found;
       document.getElementById('result').textContent = "You are in: " + getLocalBodyName(found.properties);
+
+      // Fit bounds initially or when local body changes
       const layer = geoLayer.getLayers().find(l => l.feature === found);
       if(layer){
         map.fitBounds(layer.getBounds(), {padding:[100,100]});
@@ -131,6 +114,10 @@ function updateLocation(lat, lng){
     document.getElementById('result').textContent = "You are not inside any local body polygon.";
   }
 }
+
+// Initialize map immediately
+map = L.map('map').setView([10.5, 76.5], 7); // Center of Kerala
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
 
 // Load GeoJSON first
 fetch('local_bodies.geojson')
@@ -142,7 +129,12 @@ fetch('local_bodies.geojson')
       return;
     }
 
-    // Start watching position every ~3 seconds
+    // Draw polygons
+    geoLayer = L.geoJSON(geoFeatures, {
+      style: {color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}
+    }).addTo(map);
+
+    // Start watching position (~3 seconds frequency)
     if(navigator.geolocation){
       navigator.geolocation.watchPosition(pos => {
         updateLocation(pos.coords.latitude, pos.coords.longitude);
@@ -152,6 +144,7 @@ fetch('local_bodies.geojson')
     } else {
       alert("Geolocation not supported");
     }
+
   })
   .catch(err=>{
     console.error(err);
