@@ -25,7 +25,10 @@
 <script>
 let map, geoFeatures = [], geoLayer = null, userMarker = null;
 let currentLocalBody = null;
-let counter = 1; // Counter for refresh verification
+let counter = 1; // Counter for debugging refresh
+let lastLat = null;
+let lastLng = null;
+const THRESHOLD_METERS = 5; // Minimum movement to recalc local body
 
 // Example neighbor map (replace with real neighbor data if available)
 let neighborsMap = {};
@@ -43,6 +46,18 @@ function getLocalBodyName(props){
 // Check if point is inside map viewport
 function isMarkerInView(latlng){
   return map.getBounds().contains(latlng);
+}
+
+// Haversine distance in meters
+function distanceInMeters(lat1, lng1, lat2, lng2){
+  const R = 6371000; // Earth radius in meters
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+            Math.sin(dLng/2)**2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }
 
 // Find current local body using optimized neighbor check
@@ -77,11 +92,11 @@ function moveMarkerSmoothly(marker, newLatLng){
   marker.setLatLng(newLatLng);
 }
 
-// Process new location
-function updateLocation(lat, lng){
+// Process new location if movement threshold passed
+function processLocation(lat, lng){
   const latlng = [lat, lng];
 
-  // Update counter every refresh
+  // Increment counter every refresh (for debugging)
   let resultText = "Update: " + counter;
   counter = counter % 5 + 1;
 
@@ -104,52 +119,4 @@ function updateLocation(lat, lng){
       currentLocalBody = found;
       const layer = geoLayer.getLayers().find(l => l.feature === found);
       if(layer){
-        map.fitBounds(layer.getBounds(), {padding:[100,100]});
-      }
-    }
-    resultText += " | You are in: " + getLocalBodyName(found.properties);
-  } else {
-    resultText += " | You are not inside any local body polygon.";
-  }
-
-  document.getElementById('result').textContent = resultText;
-}
-
-// Initialize map immediately
-map = L.map('map').setView([10.5, 76.5], 7);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
-
-// Load GeoJSON
-fetch('local_bodies.geojson')
-  .then(res => res.json())
-  .then(data => {
-    geoFeatures = data.features || [];
-    if(geoFeatures.length === 0){
-      document.getElementById('result').textContent = "GeoJSON has no features.";
-      return;
-    }
-
-    // Draw polygons
-    geoLayer = L.geoJSON(geoFeatures, {
-      style: {color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}
-    }).addTo(map);
-
-    // Watch position
-    if(navigator.geolocation){
-      navigator.geolocation.watchPosition(pos => {
-        updateLocation(pos.coords.latitude, pos.coords.longitude);
-      }, err => {
-        alert("Unable to get location: "+err.message);
-      }, {enableHighAccuracy:true, maximumAge:3000, timeout:5000});
-    } else {
-      alert("Geolocation not supported");
-    }
-
-  })
-  .catch(err=>{
-    console.error(err);
-    document.getElementById('result').textContent = "Error loading GeoJSON.";
-  });
-</script>
-</body>
-</html>
+        map.fitBounds(layer.getBounds(), {paddin
