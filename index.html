@@ -53,37 +53,34 @@ function processUserLocation(lat,lng){
     } catch(e){ console.warn(e); }
   }
 
+  // Show map now
+  const mapDiv = document.getElementById('map');
+  mapDiv.style.display = 'block';
+
+  // Initialize map centered roughly around user
+  map = L.map('map').setView([lat,lng], 12);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
+
+  // Draw all polygons in same style
+  geoLayer = L.geoJSON(geoFeatures, {
+    style: {color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}
+  }).addTo(map);
+
+  // Add marker for user
+  userMarker = L.circleMarker([lat,lng], {
+    radius:7, fillColor:'#007bff', color:'#fff', weight:1.2, fillOpacity:1
+  }).addTo(map);
+
   if(found){
     const name = getLocalBodyName(found.properties);
     document.getElementById('result').textContent = "You are in: "+name;
 
-    // Show map now
-    const mapDiv = document.getElementById('map');
-    mapDiv.style.display = 'block';
-
-    // Initialize map centered roughly around user
-    map = L.map('map').setView([lat,lng], 10);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
-
-    // Draw polygons (all same style, no highlight)
-    geoLayer = L.geoJSON(geoFeatures, {
-      style: {color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}
-    }).addTo(map);
-
-    // Add marker for user
-    userMarker = L.circleMarker([lat,lng], {
-      radius:7, fillColor:'#007bff', color:'#fff', weight:1.2, fillOpacity:1
-    }).addTo(map);
-
-    // Zoom to local body with padding so surrounding bodies are visible
-    if(found.geometry){
-      const layer = geoLayer.getLayers().find(l => l.feature === found);
-      if(layer){
-        map.fitBounds(layer.getBounds(), {padding: [100, 100]}); // padding = visible space around
-      }
+    // Fit bounds of detected local body with padding (zoomed out slightly)
+    const layer = geoLayer.getLayers().find(l => l.feature === found);
+    if(layer){
+      map.fitBounds(layer.getBounds(), {padding: [100,100]});
     }
-
   } else {
     document.getElementById('result').textContent = "You are not inside any local body polygon.";
   }
