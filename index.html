@@ -9,9 +9,19 @@
 <style>
   body, html { margin: 0; padding: 0; height: 100%; }
   #map { width: 100%; height: 100%; }
+
+  /* Local body label at bottom center */
   #result {
-    position: absolute; top: 10px; left: 10px; z-index:1000; background:rgba(255,255,255,0.9);
-    padding:6px 10px; border-radius:6px; font-weight:bold;
+    position: absolute;
+    bottom: 20px;        /* space from bottom */
+    left: 50%;           /* center horizontally */
+    transform: translateX(-50%); /* truly center */
+    z-index: 1000;
+    background: rgba(255,255,255,0.9);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 22px;     /* increased font size */
   }
 </style>
 </head>
@@ -117,9 +127,10 @@ function processLocation(lat, lng){
         map.fitBounds(layer.getBounds(), {padding:[100,100]});
       }
     }
-    document.getElementById('result').textContent = "You are in: " + getLocalBodyName(found.properties);
+    // Display only the local body name
+    document.getElementById('result').textContent = getLocalBodyName(found.properties);
   } else {
-    document.getElementById('result').textContent = "You are not inside any local body polygon.";
+    document.getElementById('result').textContent = "Not inside any local body";
   }
 }
 
