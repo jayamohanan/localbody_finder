@@ -148,7 +148,14 @@ fetch('local_bodies.geojson')
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
 
-        if(lastLat === null || distanceInMeters(lastLat, lastLng, lat, lng) >= THRESHOLD_METERS){
+        if(lastLat === null){
+          // First location: always process
+          lastLat = lat;
+          lastLng = lng;
+          console.log("Initial location detected — calculating local body.");
+          processLocation(lat, lng);
+        } else if(distanceInMeters(lastLat, lastLng, lat, lng) >= THRESHOLD_METERS){
+          // Subsequent locations: only if moved more than threshold
           lastLat = lat;
           lastLng = lng;
 
