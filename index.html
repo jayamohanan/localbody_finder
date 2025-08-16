@@ -14,7 +14,7 @@
   #version {
     position: absolute;
     top: 10px;
-    right: 10px;       /* top-right corner */
+    right: 10px;
     z-index: 1000;
     background: rgba(255,255,255,0.8);
     padding: 6px 12px;
@@ -40,7 +40,7 @@
   /* Welcome message above local body */
   #welcome {
     position: absolute;
-    bottom: 60px;       /* above the local body name */
+    bottom: 60px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
@@ -49,28 +49,28 @@
     border-radius: 8px;
     font-weight: bold;
     font-size: 20px;
-    display: none; /* hidden initially */
+    display: none;
   }
 
   /* Local body label at bottom center */
   #result {
     position: absolute;
-    bottom: 20px;        /* space from bottom */
-    left: 50%;           /* center horizontally */
-    transform: translateX(-50%); /* truly center */
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 1000;
     background: rgba(255,255,255,0.9);
     padding: 10px 16px;
     border-radius: 8px;
     font-weight: bold;
-    font-size: 22px;     /* increased font size */
+    font-size: 22px;
   }
 </style>
 </head>
 <body>
 
 <!-- Version number -->
-<div id="version">v1.0</div> <!-- this is incremented by one everytime this html is edited -->
+<div id="version">v1.1</div> <!-- this is incremented by one everytime this html is edited -->
 
 <!-- Update counter -->
 <div id="updateCounter">Update 0</div>
@@ -87,16 +87,15 @@ let map, geoFeatures = [], geoLayer = null, userMarker = null;
 let currentLocalBody = null;
 let lastLat = null;
 let lastLng = null;
-const THRESHOLD_METERS = 5; // Minimum movement to recalc local body
+const THRESHOLD_METERS = 5;
 
-// Update counter variables
 let updateCounter = 0;
 const MAX_COUNTER = 9;
-
-// Example neighbor map (replace with real neighbor data if available)
 let neighborsMap = {};
 
-// Utility to get local body name
+// Detect mobile Safari
+const isMobileSafari = /iP(ad|hone|od).+Version\/[\d.]+.*Safari/i.test(navigator.userAgent);
+
 function getLocalBodyName(props){
   if(!props) return 'Unknown';
   const keys = ['name','NAME','Name','LGB_NAME','LB_NAME','local_body','LOCAL_BODY'];
@@ -106,14 +105,12 @@ function getLocalBodyName(props){
   return 'Unknown';
 }
 
-// Check if point is inside map viewport
 function isMarkerInView(latlng){
   return map.getBounds().contains(latlng);
 }
 
-// Haversine distance in meters
 function distanceInMeters(lat1, lng1, lat2, lng2){
-  const R = 6371000; // Earth radius in meters
+  const R = 6371000;
   const dLat = (lat2-lat1)*Math.PI/180;
   const dLng = (lng2-lng1)*Math.PI/180;
   const a = Math.sin(dLat/2)**2 +
@@ -123,7 +120,6 @@ function distanceInMeters(lat1, lng1, lat2, lng2){
   return R * c;
 }
 
-// Find current local body using optimized neighbor check
 function findCurrentLocalBody(lat, lng){
   const point = [lng, lat];
 
@@ -150,25 +146,20 @@ function findCurrentLocalBody(lat, lng){
   return null;
 }
 
-// Smoothly move marker
 function moveMarkerSmoothly(marker, newLatLng){
   marker.setLatLng(newLatLng);
 }
 
-// Update the visual update counter
 function incrementUpdateCounter(){
   updateCounter++;
   if(updateCounter > MAX_COUNTER) updateCounter = 1;
   document.getElementById('updateCounter').textContent = "Update " + updateCounter;
 }
 
-// Process new location
 function processLocation(lat, lng){
   incrementUpdateCounter();
-
   const latlng = [lat, lng];
 
-  // Add or move marker
   if(!userMarker){
     userMarker = L.circleMarker(latlng, {
       radius:7, fillColor:'#007bff', color:'#fff', weight:1.2, fillOpacity:1
@@ -180,17 +171,14 @@ function processLocation(lat, lng){
     }
   }
 
-  // Find local body
   let found = findCurrentLocalBody(lat, lng);
   if(found){
     const localBodyName = getLocalBodyName(found.properties);
 
-    // Show welcome message only when entering a new local body
     if(currentLocalBody !== found){
       currentLocalBody = found;
       document.getElementById('welcome').style.display = 'block';
       document.getElementById('welcome').textContent = "Welcome to " + localBodyName;
-      // Auto-hide after 3 seconds
       setTimeout(() => { document.getElementById('welcome').style.display = 'none'; }, 3000);
 
       const layer = geoLayer.getLayers().find(l => l.feature === found);
@@ -205,11 +193,9 @@ function processLocation(lat, lng){
   }
 }
 
-// Initialize map
 map = L.map('map').setView([10.5, 76.5], 7);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OSM'}).addTo(map);
 
-// Load GeoJSON
 fetch('local_bodies.geojson')
   .then(res => res.json())
   .then(data => {
@@ -219,37 +205,35 @@ fetch('local_bodies.geojson')
       return;
     }
 
-    // Draw polygons
     geoLayer = L.geoJSON(geoFeatures, {
       style: {color:'#2a63b8', weight:1, fillColor:'#8fb8ff', fillOpacity:0.3}
     }).addTo(map);
 
-    // Watch position with movement threshold
     if(navigator.geolocation){
+      const geoOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
       navigator.geolocation.watchPosition(pos => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
 
         if(lastLat === null){
-          // First location: always process
           lastLat = lat;
           lastLng = lng;
           console.log("Initial location detected — calculating local body.");
           processLocation(lat, lng);
         } else if(distanceInMeters(lastLat, lastLng, lat, lng) >= THRESHOLD_METERS){
-          // Subsequent locations: only if moved more than threshold
           lastLat = lat;
           lastLng = lng;
-
           console.log("Device moved more than 5 meters — recalculating local body.");
           processLocation(lat, lng);
         } else {
-          // Even if not moved, still process for update counter
           processLocation(lastLat, lastLng);
         }
       }, err => {
         console.warn("Unable to get location: " + err.message);
-      }, { enableHighAccuracy:true, maximumAge:0, timeout:5000 });
+        if(isMobileSafari){
+          alert("Please enable location permissions in Safari settings to use this app.");
+        }
+      }, geoOptions);
     } else {
       alert("Geolocation not supported");
     }
