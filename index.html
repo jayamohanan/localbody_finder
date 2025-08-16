@@ -10,6 +10,33 @@
   body, html { margin: 0; padding: 0; height: 100%; }
   #map { width: 100%; height: 100%; }
 
+  /* Version number top-left */
+  #version {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.8);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+  }
+
+  /* Update counter top-center */
+  #updateCounter {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: rgba(255,255,255,0.8);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+  }
+
   /* Welcome message above local body */
   #welcome {
     position: absolute;
@@ -41,6 +68,13 @@
 </style>
 </head>
 <body>
+
+<!-- Version number -->
+<div id="version">v1.0</div> <!-- this is incremented by one everytime this html is edited -->
+
+<!-- Update counter -->
+<div id="updateCounter">Update 0</div>
+
 <div id="welcome"></div>
 <div id="result">Detecting your location...</div>
 <div id="map"></div>
@@ -54,6 +88,10 @@ let currentLocalBody = null;
 let lastLat = null;
 let lastLng = null;
 const THRESHOLD_METERS = 5; // Minimum movement to recalc local body
+
+// Update counter variables
+let updateCounter = 0;
+const MAX_COUNTER = 9;
 
 // Example neighbor map (replace with real neighbor data if available)
 let neighborsMap = {};
@@ -117,8 +155,17 @@ function moveMarkerSmoothly(marker, newLatLng){
   marker.setLatLng(newLatLng);
 }
 
+// Update the visual update counter
+function incrementUpdateCounter(){
+  updateCounter++;
+  if(updateCounter > MAX_COUNTER) updateCounter = 1;
+  document.getElementById('updateCounter').textContent = "Update " + updateCounter;
+}
+
 // Process new location
 function processLocation(lat, lng){
+  incrementUpdateCounter();
+
   const latlng = [lat, lng];
 
   // Add or move marker
@@ -196,6 +243,9 @@ fetch('local_bodies.geojson')
 
           console.log("Device moved more than 5 meters — recalculating local body.");
           processLocation(lat, lng);
+        } else {
+          // Even if not moved, still process for update counter
+          processLocation(lastLat, lastLng);
         }
       }, err => {
         console.warn("Unable to get location: " + err.message);
