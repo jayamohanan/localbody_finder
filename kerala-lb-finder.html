@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>Kerala Local Body Finder</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin="anonymous"></script>
+
+  <!-- Turf.js for point-in-polygon & distance -->
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+  <style>
+    html, body { height:100%; margin:0; }
+    #map { height: 65vh; width: 100%; }
+    .toolbar {
+      display:flex; gap:.5rem; padding:.6rem; flex-wrap:wrap; align-items:center;
+      background:#f6f7f9; border-bottom:1px solid #e2e5ea; position:sticky; top:0; z-index:1000;
+    }
+    .toolbar input[type="text"] { flex:1 1 240px; padding:.5rem; }
+    .toolbar button, .toolbar label {
+      padding:.5rem .75rem; border:1px solid #c9ced6; background:#fff; border-radius:.45rem;
+    }
+    .pill { display:inline-block; padding:.35rem .6rem; border-radius:1rem; background:#eef2ff; }
+    #status { padding:.5rem .75rem; background:#fff; border-top:1px solid #e2e5ea; }
+    .small { font-size:.9rem; color:#5b6573; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <label for="geojsonFile">Load GeoJSON:
+      <input id="geojsonFile" type="file" accept=".geojson,application/geo+json,application/json"/>
+    </label>
+    <input id="geojsonUrl" type="text" placeholder="…or paste GeoJSON URL (HTTPS) and click Load"/>
+    <button id="loadUrlBtn">Load</button>
+    <button id="locateBtn">📍 Locate Me</button>
+    <span id="featureCount" class="pill hidden"></span>
+  </div>
+
+  <div id="map"></div>
+  <div id="status" class="small">Load your Kerala local body GeoJSON, then tap <b>Locate Me</b>.</div>
+
+  <script>
+    // --- Map setup ---
+    const map = L.map('map', {
+      attributionControl: true
+    }).setView([10.352, 76.512], 8); // Kerala-ish
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution:'&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Layers
+    let geojsonLayer = null;
+    let highlightLayer = L.geoJSON(null, {style: {color:'#1d4ed8', weight:3, fillOpacity:0.1}});
+    highlightLayer.addTo(map);
+
+    let youMarker = L.circleMarker([0,0], {radius:6, weight:2});
+    let accuracyCircle = null;
+
+    // Data
+    let featureCollection = null; // Turf FeatureCollection
+    let centroids = [];           // [{i, centroid}]
+    let nameKeys = ["name", "NAME", "Name", "localbody", "LocalBody", "LB_NAME", "DIST_NAME", "L_SGD_NAME"]; // try these in order
+
+    // Utilities
+    function setStatus(msg) { document.getElementById('status').innerHTML = msg; }
+    function showCount(n) {
+      const el = document.getElementById('featureCount');
+      el.textContent = n + " areas loaded";
+      el.classList.remove('hidden');
+    }
+    function getFeatureName(props) {
+      for (const k of nameKeys) {
+        if (props && props[k] != null && String(props[k]).trim() !== "") return String(props[k]);
+      }
+      // Fallback: join first two props
+      const keys = props ? Object.keys(props) : [];
+      if (keys.length) return String(props[keys[0]]);
+      return "Unnamed area";
+    }
+
+    function loadGeoJSON(obj) {
+      // Normalize to FeatureCollection
+      let fc = null;
+      try {
+        if (obj.type === 'FeatureCollection') {
+          fc = obj;
+        } else if (obj.type === 'Feature') {
+          fc = { type: 'FeatureCollection', features: [obj] };
+        } else if (obj.type === 'Polygon' || obj.type === 'MultiPolygon') {
+          fc = { type:'FeatureCollection', features:[{ type:'Feature', properties:{}, geometry: obj }] };
+        } else {
+          throw new Error("Unsupported GeoJSON type: " + obj.type);
+        }
+      } catch (e) {
+        console.error(e);
+        setStatus("❌ Invalid GeoJSON.");
+        return;
+      }
+
+      // Clear previous
+      if (geojsonLayer) { map.removeLayer(geojsonLayer); }
+      highlightLayer.clearLayers();
+
+      // Add to map
+      geojsonLayer = L.geoJSON(fc, {
+        style: { color:'#475569', weight:1, fillOpacity:0.05 },
+        onEachFeature: (feature, layer) => {
+          layer.bindPopup(getFeatureName(feature.properties));
+        }
+      }).addTo(map);
+
+      featureCollection = fc;
+      centroids = fc.features.map((f, i) => ({ i, centroid: turf.centroid(f) }));
+
+      try { map.fitBounds(geojsonLayer.getBounds(), { padding:[20,20] }); } catch {}
+
+      showCount(fc.features.length);
+      setStatus("✅ GeoJSON loaded. Tap <b>Locate Me</b> to detect your local body.");
+    }
+
+    // File input
+    document.getElementById('geojsonFile').addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const obj = JSON.parse(text);
+        loadGeoJSON(obj);
+      } catch (err) {
+        console.error(err);
+        setStatus("❌ Could not parse the selected file as GeoJSON.");
+      }
+    });
+
+    // URL input
+    document.getElementById('loadUrlBtn').addEventListener('click', async () => {
+      const url = document.getElementById('geojsonUrl').value.trim();
+      if (!url) return;
+      try {
+        setStatus("⏳ Fetching GeoJSON from URL…");
+        const res = await fetch(url, { cache:'no-cache' });
+        if (!res.ok) throw new Error(res.status + " " + res.statusText);
+        const obj = await res.json();
+        loadGeoJSON(obj);
+      } catch (err) {
+        console.error(err);
+        setStatus("❌ Failed to fetch/parse GeoJSON. Ensure it’s a valid HTTPS URL and CORS is allowed.");
+      }
+    });
+
+    // Locate Me
+    document.getElementById('locateBtn').addEventListener('click', () => {
+      if (!featureCollection) {
+        setStatus("ℹ️ Load your GeoJSON first, then tap <b>Locate Me</b>.");
+        return;
+      }
+      if (!('geolocation' in navigator)) {
+        setStatus("❌ Geolocation not available in this browser.");
+        return;
+      }
+      setStatus("📡 Getting your location… Allow permission in Safari.");
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          const pt = turf.point([longitude, latitude]);
+
+          // Update marker & accuracy
+          if (accuracyCircle) map.removeLayer(accuracyCircle);
+          youMarker.setLatLng([latitude, longitude]).addTo(map).bindPopup("You are here").openPopup();
+          accuracyCircle = L.circle([latitude, longitude], { radius: accuracy || 20, weight:1, dashArray:'4 4' }).addTo(map);
+
+          // Find containing polygon
+          let foundIndex = -1;
+          for (let i = 0; i < featureCollection.features.length; i++) {
+            const f = featureCollection.features[i];
+            try {
+              if (!f.geometry) continue;
+              if (turf.booleanPointInPolygon(pt, f)) { foundIndex = i; break; }
+            } catch (e) { /* skip invalid geometries */ }
+          }
+
+          highlightLayer.clearLayers();
+
+          if (foundIndex >= 0) {
+            const f = featureCollection.features[foundIndex];
+            const lname = getFeatureName(f.properties);
+            highlightLayer.addData(f);
+            setStatus(`✅ You are inside: <b>${lname}</b><br><span class="small">Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)} (±${Math.round(accuracy||0)} m)</span>`);
+            // Zoom to highlighted polygon with some padding; keep your marker visible
+            try { map.fitBounds(L.geoJSON(f).getBounds().pad(0.5)); } catch {}
+          } else {
+            // Not inside any polygon — find nearest by centroid
+            let best = { idx: -1, dist: Infinity };
+            for (const c of centroids) {
+              const d = turf.distance(pt, c.centroid, { units:'kilometers' });
+              if (d < best.dist) best = { idx: c.i, dist: d };
+            }
+            if (best.idx >= 0) {
+              const nf = featureCollection.features[best.idx];
+              const lname = getFeatureName(nf.properties);
+              highlightLayer.addData(nf);
+              setStatus(`⚠️ You don’t appear inside any area. Nearest local body: <b>${lname}</b> (~${best.dist.toFixed(2)} km).`);
+            } else {
+              setStatus("⚠️ Could not determine your area from the data.");
+            }
+          }
+        },
+        (err) => {
+          const msg = ({
+            1: "Permission denied.",
+            2: "Position unavailable.",
+            3: "Timeout."
+          })[err.code] || "Unknown error.";
+          setStatus("❌ Geolocation error: " + msg + " (Tip: use HTTPS and allow location in Safari Settings > Websites > Location).");
+        },
+        { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
+      );
+    });
+
+    // Extra: try to auto-zoom to Kerala initially
+    // (If tiles fail due to offline, at least show a blank canvas.)
+  </script>
+</body>
+</html>
